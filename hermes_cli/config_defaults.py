@@ -216,6 +216,19 @@ DEFAULT_CONFIG = {
             "reducer_max_tokens": 1400,
             "timeout_seconds": 300,
         },
+        # Local LLMLingua-2 sidecar. It only processes plain prose on the
+        # request copy; literals and structured outputs remain untouched.
+        "semantic_compression": {
+            "enabled": True,
+            "providers": ["lmstudio"],
+            "endpoint": "http://127.0.0.1:8765",
+            "min_input_chars": 6000,
+            "rate": 0.55,
+            "timeout_seconds": 30,
+            "compress_user_prose": True,
+            "compress_tool_prose": True,
+            "max_tool_results_per_call": 2,
+        },
         # Local-environment toolchain probe — surfaces Python/pip/uv/PEP-668
         # state in the system prompt when something non-default is detected
         # (e.g. python3 has no pip module, pip→python version mismatch, PEP

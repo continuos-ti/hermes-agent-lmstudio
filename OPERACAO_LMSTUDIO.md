@@ -143,6 +143,48 @@ cache KV. Se nenhum trabalhador ou o redutor responder, a camada falha aberta:
 o Hermes usa a solicitação original e os mecanismos de poda já existentes,
 sem perder a conversa.
 
+## Compressão semântica com NPU
+
+O Hermes também pode reduzir texto corrido antes de ele entrar no contexto do
+LM Studio. A camada usa LLMLingua-2 em um serviço local OpenVINO, isolado em
+`G:\Hermes\_Agente\npu-compressor`, e a inferência é executada na NPU Intel.
+Ela não usa a VRAM do modelo principal. O runtime, os pesos, os caches e os
+logs desse serviço permanecem sob esse mesmo diretório.
+
+A compressão é deliberadamente seletiva: só processa prosa longa, e somente se
+o serviço comprovar redução de tokens. Código, JSON, comandos, URLs e caminhos
+de arquivo são enviados sem alteração. A mensagem original e o histórico
+persistido também não são alterados; somente a cópia de cada chamada ao modelo
+é reduzida. Caso o serviço pare, exceda o tempo ou não melhore a contagem de
+tokens, o Hermes continua pelo caminho normal.
+
+Além da entrada do usuário, no máximo dois resultados de ferramentas que sejam
+prosa longa podem ser comprimidos por chamada. Isso impede que relatórios
+verbosos ocupem todo o contexto, preservando resultados estruturados e
+evidências literais.
+
+Configuração padrão em `agent.semantic_compression`:
+
+```yaml
+agent:
+  semantic_compression:
+    enabled: true
+    providers: [lmstudio]
+    endpoint: http://127.0.0.1:8765
+    min_input_chars: 6000
+    rate: 0.55
+    timeout_seconds: 30
+    compress_user_prose: true
+    compress_tool_prose: true
+    max_tool_results_per_call: 2
+```
+
+O serviço expõe apenas `127.0.0.1:8765`; a verificação operacional é
+`GET /health`, que deve retornar `device: NPU`. A NPU usa um grafo estático de
+128 tokens e uma fila de inferência única. Essa escolha evita falhas do driver
+observadas em grafos com forma dinâmica e impede concorrência interna de
+corromper a execução.
+
 ## Uso correto de ferramentas
 
 Ferramentas devem existir para produzir evidência nova, não para manter a

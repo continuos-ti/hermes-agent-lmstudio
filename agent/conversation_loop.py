@@ -1950,6 +1950,23 @@ def run_conversation(
         except Exception:
             pass
 
+    # Long plain prose can first be reduced by the local semantic compressor.
+    # The original stays in persisted history; this only changes the wire copy.
+    try:
+        from hermes_cli.config import load_config as _load_semantic_compression_config
+        from agent.semantic_compression import maybe_compress_user_message
+
+        _semantic_raw_config = (
+            ((_load_semantic_compression_config() or {}).get("agent") or {}).get("semantic_compression")
+        )
+        _semantic_request = maybe_compress_user_message(user_message, agent, _semantic_raw_config)
+        if _semantic_request:
+            if persist_user_message is None:
+                persist_user_message = user_message
+            user_message = _semantic_request
+    except Exception:
+        logger.warning("Semantic compression failed; using normal turn path", exc_info=True)
+
     # Oversized local-model requests are reduced before the ordinary turn
     # prologue. The original text remains the persisted user message; only the
     # wire copy is replaced, so existing pruning/compression and session
@@ -2587,6 +2604,18 @@ def run_conversation(
             api_messages,
             drop_codex_reasoning_items=agent.api_mode != "codex_responses",
         )
+
+        # This modifies only the send-time copy, after tool-message repair.
+        try:
+            from hermes_cli.config import load_config as _load_semantic_tool_config
+            from agent.semantic_compression import compress_tool_messages
+
+            _semantic_tool_config = (
+                ((_load_semantic_tool_config() or {}).get("agent") or {}).get("semantic_compression")
+            )
+            api_messages = compress_tool_messages(api_messages, agent, _semantic_tool_config)
+        except Exception:
+            logger.warning("Semantic tool compression failed; keeping original API messages", exc_info=True)
 
         # Normalize message whitespace and tool-call JSON for consistent
         # prefix matching.  Ensures bit-perfect prefixes across turns,
