@@ -99,6 +99,50 @@ necessários para ela.
 Isso permite receber uma instrução grande do usuário sem enviar sua totalidade,
 mais todo o histórico bruto, em cada chamada ao modelo.
 
+## Contexto paralelo para solicitações extensas
+
+Além da poda, o Hermes inclui uma etapa opcional de *map-reduce* para uma nova
+solicitação grande enviada ao LM Studio. Ela é executada antes da montagem do
+turno normal:
+
+1. A mensagem original é preservada no histórico da sessão.
+2. Somente a cópia que seguiria para o modelo é dividida em fragmentos com
+   pequena sobreposição.
+3. Até quatro trabalhadores locais analisam os fragmentos em paralelo. Eles
+   não recebem ferramentas, não executam comandos e não escrevem arquivos.
+4. Cada trabalhador produz um briefing limitado, contendo requisitos,
+   restrições, referências literais e questões abertas.
+5. Um redutor transforma os briefings em uma especificação curta.
+6. O Hermes principal recebe a especificação e continua normalmente com suas
+   ferramentas, poda, memória e recuperação de erro já existentes.
+
+O mecanismo é limitado ao provider `lmstudio` por padrão e é ativado para
+mensagens a partir de 24.000 caracteres. Os limites ficam em
+`agent.parallel_context` no `config.yaml`:
+
+```yaml
+agent:
+  parallel_context:
+    enabled: true
+    providers: [lmstudio]
+    min_input_chars: 24000
+    max_workers: 4
+    chunk_chars: 12000
+    max_chunk_chars: 48000
+    max_chunks: 16
+    chunk_overlap_chars: 600
+    worker_max_tokens: 700
+    reducer_max_tokens: 1400
+    timeout_seconds: 300
+```
+
+O limite de quatro é intencional: corresponde à configuração de inferências
+simultâneas do LM Studio. Para hardware com menor folga de VRAM, reduzir
+`max_workers` para dois preserva a arquitetura e diminui a pressão sobre o
+cache KV. Se nenhum trabalhador ou o redutor responder, a camada falha aberta:
+o Hermes usa a solicitação original e os mecanismos de poda já existentes,
+sem perder a conversa.
+
 ## Uso correto de ferramentas
 
 Ferramentas devem existir para produzir evidência nova, não para manter a
@@ -189,4 +233,3 @@ ainda não produziu erro.
 - A sessão começa com objetivo e limite de escopo claros.
 - Poda preventiva e checkpoint estão ativos antes do limite de contexto.
 - Não há loops de continuação, leitura ou ferramenta nos logs recentes.
-

@@ -1950,6 +1950,25 @@ def run_conversation(
         except Exception:
             pass
 
+    # Oversized local-model requests are reduced before the ordinary turn
+    # prologue. The original text remains the persisted user message; only the
+    # wire copy is replaced, so existing pruning/compression and session
+    # history semantics stay intact.
+    try:
+        from hermes_cli.config import load_config as _load_parallel_context_config
+        from agent.parallel_context import prepare_request
+
+        _parallel_raw_config = (
+            ((_load_parallel_context_config() or {}).get("agent") or {}).get("parallel_context")
+        )
+        _parallel_request = prepare_request(user_message, agent, _parallel_raw_config)
+        if _parallel_request:
+            if persist_user_message is None:
+                persist_user_message = user_message
+            user_message = _parallel_request
+    except Exception:
+        logger.warning("Parallel context preparation failed; using normal turn path", exc_info=True)
+
     # The gateway caches agents across user turns.  Compression state is
     # per-turn: carrying a prior in-place boundary forward would make a later
     # uncompressed result look like a compacted transcript to gateway writers.

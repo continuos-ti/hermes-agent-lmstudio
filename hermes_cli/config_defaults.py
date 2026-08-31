@@ -199,6 +199,23 @@ DEFAULT_CONFIG = {
         # compounds over a long conversation.  Costs ~70 tokens in the cached
         # system prompt.  Set False to disable globally.
         "parallel_tool_call_guidance": True,
+        # Large local prompts can be summarized through bounded parallel
+        # read-only workers before the normal tool loop starts. This keeps the
+        # persisted request intact while preventing a single oversized turn
+        # from consuming the model context before pruning can help.
+        "parallel_context": {
+            "enabled": True,
+            "providers": ["lmstudio"],
+            "min_input_chars": 24000,
+            "max_workers": 4,
+            "chunk_chars": 12000,
+            "max_chunk_chars": 48000,
+            "max_chunks": 16,
+            "chunk_overlap_chars": 600,
+            "worker_max_tokens": 700,
+            "reducer_max_tokens": 1400,
+            "timeout_seconds": 300,
+        },
         # Local-environment toolchain probe — surfaces Python/pip/uv/PEP-668
         # state in the system prompt when something non-default is detected
         # (e.g. python3 has no pip module, pip→python version mismatch, PEP
